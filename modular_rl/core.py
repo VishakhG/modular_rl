@@ -83,9 +83,14 @@ def run_policy_gradient_algorithm(env, agent, usercfg=None, callback=None):
     tstart = time.time()
     seed_iter = itertools.count()
 
+    sample_diversity = []
+    cfg["mean_sample_diversity"] = None
     for _ in xrange(cfg["n_iter"]):
         # Rollouts ========
         paths = get_paths(env, agent, cfg, seed_iter)
+        sample_diversity.append(compute_sample_diversities(paths))
+        cfg["mean_sample_diversity"] =  np.mean(sample_diversity)
+        print cfg["mean_sample_diversity"];
         compute_advantage(agent.baseline, paths, gamma=cfg["gamma"], lam=cfg["lam"])
         # VF Update ========
         vf_stats = agent.baseline.fit(paths)
@@ -99,11 +104,30 @@ def run_policy_gradient_algorithm(env, agent, usercfg=None, callback=None):
         stats["TimeElapsed"] = time.time() - tstart
         if callback: callback(stats)
 
+
+def compute_sample_diversities(paths) :
+    score = 0
+    rew = []
+    for path in paths:
+      rew.append(np.sum(path["reward"]))
+    score +=  np.mean(rew) + np.std(rew)
+
+    return np.mean(score)   
+
+def compute_diversity_advantage(baseline, path):
+    if baseline == None:
+        return 1
+    rew = path['reward']
+    ratio = np.divide((np.mean(rew)+ np.std(rew)) ,  baseline)
+
+    return ratio
+        
+        
 def get_paths(env, agent, cfg, seed_iter):
     if cfg["parallel"]:
         raise NotImplementedError
     else:
-        paths = do_rollouts_serial(env, agent, cfg["timestep_limit"], cfg["timesteps_per_batch"], seed_iter)
+        paths = do_rollouts_serial(env, agent, cfg["timestep_limit"], cfg["timesteps_per_batch"], seed_iter, cfg["mean_sample_diversity"])
     return paths
 
 
@@ -134,14 +158,16 @@ def rollout(env, agent, timestep_limit):
     data["terminated"] = terminated
     return data
 
-def do_rollouts_serial(env, agent, timestep_limit, n_timesteps, seed_iter):
+def do_rollouts_serial(env, agent, timestep_limit, n_timesteps, seed_iter, mean_div):
     paths = []
     timesteps_sofar = 0
     while True:
         np.random.seed(seed_iter.next())
         path = rollout(env, agent, timestep_limit)
         paths.append(path)
-        timesteps_sofar += pathlength(path)
+        experience_points = compute_diversity_advantage(mean_div, path)
+        timesteps_sofar += (pathlength(path) * experience_points)
+
         if timesteps_sofar > n_timesteps:
             break
     return paths
