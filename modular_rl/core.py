@@ -83,14 +83,14 @@ def run_policy_gradient_algorithm(env, agent, usercfg=None, callback=None):
     tstart = time.time()
     seed_iter = itertools.count()
 
-    for _ in xrange(cfg["n_iter"]):
+    for rr in xrange(cfg["n_iter"]):
         # Rollouts ========
         paths = get_paths(env, agent, cfg, seed_iter)
         compute_advantage(agent.baseline, paths, gamma=cfg["gamma"], lam=cfg["lam"])
         # VF Update ========
         vf_stats = agent.baseline.fit(paths)
         # Pol Update ========
-        pol_stats = agent.updater(paths)
+        pol_stats = agent.updater(paths, rr)
         # Stats ========
         stats = OrderedDict()
         add_episode_stats(stats, paths)

@@ -65,7 +65,7 @@ class TrpoUpdater(EzFlat, EzPickle):
         self.compute_losses = theano.function(args, losses, **FNOPTS)
         self.compute_fisher_vector_product = theano.function([flat_tangent] + args, fvp, **FNOPTS)
 
-    def __call__(self, paths):
+    def __call__(self, paths, rr):
         cfg = self.cfg
         prob_np = concat([path["prob"] for path in paths])
         ob_no = concat([path["observation"] for path in paths])
@@ -73,6 +73,8 @@ class TrpoUpdater(EzFlat, EzPickle):
         advantage_n = concat([path["advantage"] for path in paths])
         args = (ob_no, action_na, advantage_n, prob_np)
 
+        cfg["max_kl"] = cfg["max_kl"] + .00002 * rr
+        
         thprev = self.get_params_flat()
         def fisher_vector_product(p):
             return self.compute_fisher_vector_product(p, *args)+cfg["cg_damping"]*p #pylint: disable=E1101,W0640
